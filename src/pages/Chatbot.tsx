@@ -1,187 +1,152 @@
-import { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import API_BASE_URL from '../api'
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
-const suggestions = [
-  'What are symptoms of high blood pressure?',
-  'How can I improve my sleep quality?',
-  'What vitamins should I take daily?',
-  'When should I see a cardiologist?',
-  'How to manage type 2 diabetes?',
-]
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
-const nowStr = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+export const Chatbot: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const doctorId = searchParams.get('doctor') || 'cardio';
 
-export default function Chatbot() {
-  const { user, chatHistory, addChatMsg } = useAuth()
-  const [localMessages, setLocalMessages] = useState(() =>
-    chatHistory.length > 0 ? chatHistory : [{
-      role: 'bot' as const,
-      text: user
-        ? `Hello ${user.name.split(' ')[0]}! I'm MediSync AI, your personal health assistant. I can see your health profile — blood type ${user.bloodType}, known allergies: ${user.allergies}. How can I help you today?`
-        : "Hello! I'm MediSync AI, your personal health assistant. I can help you understand symptoms, suggest specialists, and answer health questions. How can I help you today?",
-      time: nowStr(),
-    }]
-  )
-  const [input, setInput] = useState('')
-  const [typing, setTyping] = useState(false)
-  const endRef = useRef<HTMLDivElement>(null)
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'assistant', content: `Hello! I am your assigned Medisync specialist. How can I assist you with your clinical evaluation today? You may also attach any prior reports or medical scans using the upload option below.` }
+  ]);
+  const [inputQuery, setInputQuery] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [prescriptionData, setPrescriptionData] = useState<any>(null);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [localMessages, typing])
+  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-  const sendMessage = async (text: string) => {
-    if (!text.trim()) return
-    const userMsg = { role: 'user' as const, text: text.trim(), time: nowStr() }
-    setLocalMessages(prev => [...prev, userMsg])
-    addChatMsg(userMsg)
-    setInput('')
-    setTyping(true)
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputQuery.trim() && !selectedFile) return;
+
+    const userMsg = inputQuery;
+    setInputQuery('');
+    setMessages((prev) => [...prev, { role: 'user', content: userMsg || '[Attached Medical Document for Review]' }]);
+    setLoading(true);
 
     try {
-      // Connect to your live Railway backend endpoint
-      const response = await fetch(`${API_BASE_URL}/chat`, {
+      let analysisContext = '';
+      
+      // If a file/scan is attached, process it through the vision/OCR pipeline
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('doctorId', doctorId);
+        formData.append('reportText', userMsg);
+
+        const scanRes = await fetch(`${apiBaseUrl}/api/consultation/analyze`, {
+          method: 'POST',
+          body: formData,
+        });
+        const scanResult = await scanRes.json();
+        analysisContext = `\n[Vision/OCR Scan Analysis: ${scanResult.detectedAnomalies} — ${scanResult.damageAssessment}]`;
+      }
+
+      // Send chat query to backend endpoint
+      const chatRes = await fetch(`${apiBaseUrl}/api/consultation/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: text.trim(),
-          user_profile: user ? {
-            name: user.name,
-            bloodType: user.bloodType,
-            allergies: user.allergies,
-            conditions: user.conditions
-          } : null
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doctorId, query: userMsg + analysisContext }),
       });
+      
+      const chatData = await chatRes.json();
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch from backend API');
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: chatData.reply || 'Review completed. Follow recommended protocols.' }
+      ]);
+
+      if (chatData.prescription) {
+        setPrescriptionData(chatData.prescription);
       }
-
-      const data = await response.json();
-      const botReplyText = data.reply || data.response || "I received your message, but didn't get a structured response.";
-
-      setTyping(false)
-      const botMsg = { role: 'bot' as const, text: botReplyText, time: nowStr() }
-      setLocalMessages(prev => [...prev, botMsg])
-      addChatMsg(botMsg)
-
-    } catch (error) {
-      setTyping(false)
-      // Fallback response if backend fails to connect
-      const fallbackMsg = { 
-        role: 'bot' as const, 
-        text: `Hello ${user ? user.name.split(' ')[0] : ''}! I am currently unable to reach the live cloud server. Please check your backend connection.`, 
-        time: nowStr() 
-      }
-      setLocalMessages(prev => [...prev, fallbackMsg])
-      addChatMsg(fallbackMsg)
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Connection error communicating with the clinical server.' }
+      ]);
+    } finally {
+      setLoading(false);
+      setSelectedFile(null);
     }
-  }
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/prescription/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doctorId, diagnosis: messages[messages.length - 1]?.content })
+      });
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Medisync_Prescription_${doctorId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      alert('Failed to download official prescription PDF.');
+    }
+  };
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ maxWidth: 800, margin: '0 auto', width: '100%', padding: '2rem 1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
-
-        {/* Header */}
-        <div style={{ background: 'linear-gradient(135deg, #1a6fbf, #00c6ae)', borderRadius: '16px 16px 0 0', padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: 50, height: 50, background: 'rgba(255,255,255,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem' }}>
-            🤖
-          </div>
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.4rem', fontWeight: 700, color: '#fff', margin: 0 }}>MediSync AI Assistant</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
-              <div style={{ width: 8, height: 8, background: '#7fffda', borderRadius: '50%', animation: 'pulse 2s infinite' }} />
-              <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem' }}>
-                {user ? `Personalized for ${user.name.split(' ')[0]}` : 'Online — Clinical AI'}
-              </span>
-            </div>
-          </div>
-          {user && (
-            <img src={user.avatar} alt={user.name} style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.4)' }} />
-          )}
-          <Link to="/doctors" style={{ textDecoration: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '0.5rem 1rem', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
-            See a Doctor →
-          </Link>
-        </div>
-
-        {/* User health context banner */}
-        {user && (
-          <div style={{ background: '#fff8e8', borderBottom: '1px solid #fcd34d', padding: '0.6rem 1.5rem', display: 'flex', gap: '1.5rem', fontSize: '0.8rem', color: '#92400e', fontWeight: 600, borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', flexWrap: 'wrap' }}>
-            <span>🩸 Blood: {user.bloodType}</span>
-            <span>⚠️ Allergies: {user.allergies}</span>
-            <span>🏥 Conditions: {user.conditions}</span>
-            <Link to="/profile" style={{ marginLeft: 'auto', color: '#1a6fbf', textDecoration: 'none', fontWeight: 700 }}>Update Profile →</Link>
-          </div>
-        )}
-
-        {/* Chat Area */}
-        <div style={{ background: '#fff', flex: 1, padding: '1.5rem', overflowY: 'auto', maxHeight: user ? '52vh' : '60vh', minHeight: 280, display: 'flex', flexDirection: 'column', gap: '1.2rem', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
-          {localMessages.map((m, i) => (
-            <div key={i} style={{ display: 'flex', flexDirection: m.role === 'user' ? 'row-reverse' : 'row', gap: '0.75rem', alignItems: 'flex-start' }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
-                {m.role === 'user' && user
-                  ? <img src={user.avatar} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <div style={{ width: '100%', height: '100%', background: m.role === 'bot' ? 'linear-gradient(135deg, #1a6fbf, #00c6ae)' : '#e8f4fd', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>{m.role === 'bot' ? '🤖' : '👤'}</div>
-                }
-              </div>
-              <div style={{ maxWidth: '78%' }}>
-                <div style={{ background: m.role === 'bot' ? 'var(--background)' : 'linear-gradient(135deg, #1a6fbf, #00c6ae)', borderRadius: m.role === 'bot' ? '4px 16px 16px 16px' : '16px 4px 16px 16px', padding: '0.9rem 1.1rem', color: m.role === 'bot' ? '#0a1628' : '#fff', fontSize: '0.92rem', lineHeight: 1.7 }}>
-                  {m.text}
-                </div>
-                <div style={{ fontSize: '0.73rem', color: '#5a7a9a', marginTop: '0.25rem', textAlign: m.role === 'user' ? 'right' : 'left' }}>{m.time}</div>
-              </div>
-            </div>
-          ))}
-
-          {typing && (
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #1a6fbf, #00c6ae)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🤖</div>
-              <div style={{ background: 'var(--background)', borderRadius: '4px 16px 16px 16px', padding: '0.9rem 1.2rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                {[0, 1, 2].map(i => (
-                  <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#1a6fbf', animation: `bounce 1s ease-in-out ${i * 0.2}s infinite` }} />
-                ))}
-              </div>
-            </div>
-          )}
-          <div ref={endRef} />
-        </div>
-
-        {/* Suggestions */}
-        <div style={{ background: '#f8faff', padding: '0.9rem 1.5rem', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {suggestions.map(s => (
-            <button key={s} onClick={() => sendMessage(s)} style={{ background: '#fff', border: '1.5px solid var(--border)', borderRadius: 20, padding: '0.3rem 0.8rem', fontSize: '0.8rem', color: '#1a6fbf', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              {s}
-            </button>
-          ))}
-        </div>
-
-        {/* Input */}
-        <div style={{ background: '#fff', borderRadius: '0 0 16px 16px', padding: '1rem 1.5rem', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', gap: '0.75rem' }}>
-          <input
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && sendMessage(input)}
-            placeholder={user ? `Ask your health question, ${user.name.split(' ')[0]}...` : 'Ask about symptoms, medications, or health advice...'}
-            style={{ flex: 1, border: '1.5px solid var(--border)', borderRadius: 10, padding: '0.7rem 1rem', fontSize: '0.95rem', outline: 'none', fontFamily: 'inherit', color: '#0a1628' }}
-          />
-          <button onClick={() => sendMessage(input)} disabled={!input.trim()} style={{ background: input.trim() ? 'linear-gradient(135deg, #1a6fbf, #00c6ae)' : '#e2e8f0', color: input.trim() ? '#fff' : '#94a3b8', border: 'none', borderRadius: 10, padding: '0.7rem 1.4rem', fontWeight: 700, cursor: input.trim() ? 'pointer' : 'not-allowed', fontSize: '0.95rem', fontFamily: 'inherit', transition: 'all 0.2s' }}>
-            Send
-          </button>
-        </div>
-
-        <p style={{ textAlign: 'center', color: '#5a7a9a', fontSize: '0.78rem', marginTop: '0.75rem' }}>
-          ⚠️ MediSync AI provides general health information only and is not a substitute for professional medical advice.
-        </p>
+    <div className="max-w-4xl mx-auto px-4 py-8 flex flex-col h-[85vh]">
+      <div className="bg-blue-600 text-white p-4 rounded-t-xl flex justify-between items-center shadow">
+        <h2 className="text-lg font-semibold capitalize">Live Telehealth Session — Dr. Persona [{doctorId}]</h2>
+        <span className="text-xs bg-blue-500 px-2.5 py-1 rounded-full">Secure SSL Channel</span>
       </div>
 
-      <style>{`
-        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-      `}</style>
-    </main>
-  )
-}
+      <div className="flex-1 bg-slate-50 border-x border-slate-200 p-4 overflow-y-auto space-y-4">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-lg rounded-xl px-4 py-3 text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 shadow-sm border border-slate-200'}`}>
+              {msg.content}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-white text-slate-500 shadow-sm border border-slate-200 rounded-xl px-4 py-3 text-sm animate-pulse">
+              Physician analyzing query and attached records...
+            </div>
+          </div>
+        )}
+      </div>
+
+      {prescriptionData && (
+        <div className="bg-amber-50 border-t border-amber-200 p-3 flex justify-between items-center px-6">
+          <p className="text-xs text-amber-800 font-medium">Official Prescription Ready for Download</p>
+          <button onClick={handleDownloadPDF} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors">
+            Download Prescription PDF
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={handleSendMessage} className="bg-white border border-slate-200 rounded-b-xl p-3 flex items-center gap-3 shadow">
+        <label className="cursor-pointer text-slate-500 hover:text-blue-600 transition-colors p-2" title="Attach Scan or Prescription">
+          📎
+          <input type="file" className="hidden" onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} />
+        </label>
+        {selectedFile && <span className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded truncate max-w-[120px]">{selectedFile.name}</span>}
+        <input
+          type="text"
+          value={inputQuery}
+          onChange={(e) => setInputQuery(e.target.value)}
+          placeholder="Type your symptoms or message..."
+          className="flex-1 border border-slate-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+        />
+        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+          Send
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default Chatbot;
