@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import API_BASE_URL from '../api'
 
 const suggestions = [
   'What are symptoms of high blood pressure?',
@@ -9,23 +10,6 @@ const suggestions = [
   'When should I see a cardiologist?',
   'How to manage type 2 diabetes?',
 ]
-
-const botReplies: Record<string, string> = {
-  'blood pressure': 'High blood pressure (hypertension) symptoms can include severe headaches, shortness of breath, nosebleeds, flushing, dizziness, and chest pain. Many people have no symptoms at all — that is why it is called the "silent killer." I recommend regular monitoring and consulting with one of our cardiologists if you are concerned.',
-  'sleep': 'Improving sleep quality involves maintaining a consistent sleep schedule, keeping your bedroom cool and dark, avoiding screens 1 hour before bed, limiting caffeine after 2 PM, and practicing relaxation techniques. If insomnia persists beyond 3 weeks, a sleep specialist may help.',
-  'vitamin': 'The core daily supplements most adults benefit from include: Vitamin D3 (1000–2000 IU), Magnesium glycinate (300–400mg), Omega-3 fatty acids (1–2g EPA+DHA), and a quality B-complex. Always consult a physician before starting new supplements.',
-  'cardiologist': 'You should see a cardiologist if you experience: chest pain or tightness, unexplained shortness of breath, irregular heartbeat, dizziness or fainting, a family history of heart disease, or risk factors like diabetes or high cholesterol.',
-  'diabetes': 'Managing type 2 diabetes centers on: maintaining blood glucose in target range, following a low-glycemic diet rich in fiber, regular aerobic exercise (150+ min/week), monitoring HbA1c every 3 months, and consistent medication adherence.',
-}
-
-function getBotReply(msg: string, userName?: string): string {
-  const lower = msg.toLowerCase()
-  const prefix = userName ? `Hi ${userName.split(' ')[0]}! ` : ''
-  for (const key of Object.keys(botReplies)) {
-    if (lower.includes(key)) return prefix + botReplies[key]
-  }
-  return `${prefix}Thank you for your question about "${msg}". Based on general medical guidelines, I recommend consulting with one of our specialist physicians who can review your complete medical history and provide personalized advice. Would you like me to connect you with an available doctor?`
-}
 
 const nowStr = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
@@ -46,19 +30,55 @@ export default function Chatbot() {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [localMessages, typing])
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return
     const userMsg = { role: 'user' as const, text: text.trim(), time: nowStr() }
     setLocalMessages(prev => [...prev, userMsg])
     addChatMsg(userMsg)
     setInput('')
     setTyping(true)
-    setTimeout(() => {
+
+    try {
+      // Connect to your live Railway backend endpoint
+      const response = await fetch(`${API_BASE_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: text.trim(),
+          user_profile: user ? {
+            name: user.name,
+            bloodType: user.bloodType,
+            allergies: user.allergies,
+            conditions: user.conditions
+          } : null
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch from backend API');
+      }
+
+      const data = await response.json();
+      const botReplyText = data.reply || data.response || "I received your message, but didn't get a structured response.";
+
       setTyping(false)
-      const botMsg = { role: 'bot' as const, text: getBotReply(text, user?.name), time: nowStr() }
+      const botMsg = { role: 'bot' as const, text: botReplyText, time: nowStr() }
       setLocalMessages(prev => [...prev, botMsg])
       addChatMsg(botMsg)
-    }, 1200 + Math.random() * 800)
+
+    } catch (error) {
+      setTyping(false)
+      // Fallback response if backend fails to connect
+      const fallbackMsg = { 
+        role: 'bot' as const, 
+        text: `Hello ${user ? user.name.split(' ')[0] : ''}! I am currently unable to reach the live cloud server. Please check your backend connection.`, 
+        time: nowStr() 
+      }
+      setLocalMessages(prev => [...prev, fallbackMsg])
+      addChatMsg(fallbackMsg)
+    }
   }
 
   return (
