@@ -61,7 +61,31 @@ export default function Doctors() {
   };
 
   const handleDownloadPDF = () => {
-    window.print();
+    if (!selectedDoctor || !bookingResult) return;
+    
+    const receiptContent = `
+========================================
+           MEDISYNC RECEIPT
+========================================
+Doctor: ${selectedDoctor.name}
+Specialty: ${selectedDoctor.specialty}
+Fee Paid: $${selectedDoctor.fee}
+Token Pass: ${bookingResult.token}
+Transaction ID: ${bookingResult.transaction_id}
+Date: ${new Date().toLocaleString()}
+========================================
+Thank you for using MediSync!
+    `.trim();
+
+    const blob = new Blob([receiptContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `MediSync_Receipt_${bookingResult.token}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const closeModal = () => {
@@ -152,7 +176,7 @@ export default function Doctors() {
                     onClick={handleDownloadPDF}
                     className="flex-1 py-2 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700 transition font-medium"
                   >
-                    Download Receipt (PDF)
+                    Download Receipt
                   </button>
                   <button 
                     onClick={closeModal}
