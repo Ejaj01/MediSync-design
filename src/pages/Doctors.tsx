@@ -60,6 +60,10 @@ export default function Doctors() {
     }
   };
 
+  const handleDownloadPDF = () => {
+    window.print();
+  };
+
   const closeModal = () => {
     setSelectedDoctor(null);
     setBookingResult(null);
@@ -136,16 +140,27 @@ export default function Doctors() {
                 <div className="text-green-600 text-5xl mb-2">✓</div>
                 <h3 className="text-lg font-bold text-gray-800">Payment Successful!</h3>
                 <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-left space-y-1">
+                  <p className="text-xs text-gray-600"><strong>Doctor:</strong> {selectedDoctor.name}</p>
+                  <p className="text-xs text-gray-600"><strong>Fee Paid:</strong> ${selectedDoctor.fee}</p>
                   <p className="text-xs text-gray-600"><strong>Token Pass:</strong> <span className="font-mono text-blue-600">{bookingResult.token}</span></p>
                   <p className="text-xs text-gray-600"><strong>Transaction ID:</strong> <span className="font-mono text-gray-600">{bookingResult.transaction_id}</span></p>
                 </div>
                 <p className="text-xs text-gray-500">Your appointment has been registered successfully. Save your token for verification.</p>
-                <button 
-                  onClick={closeModal}
-                  className="w-full py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition"
-                >
-                  Done
-                </button>
+                
+                <div className="flex space-x-3">
+                  <button 
+                    onClick={handleDownloadPDF}
+                    className="flex-1 py-2 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700 transition font-medium"
+                  >
+                    Download Receipt (PDF)
+                  </button>
+                  <button 
+                    onClick={closeModal}
+                    className="flex-1 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition font-medium"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
             )}
           </div>
