@@ -28,6 +28,14 @@ export const Chatbot: React.FC = () => {
     e.preventDefault();
     if (!inputQuery.trim() && !selectedFile) return;
 
+    // Check if the user is asking about a specific problem or uploading a file directly
+    const isSpecificMedicalQuery = Boolean(selectedFile || inputQuery.trim().length > 5);
+
+    if (isSpecificMedicalQuery) {
+      navigate('/doctors');
+      return;
+    }
+
     const userMsg = inputQuery;
     const fileToUpload = selectedFile;
     
@@ -71,7 +79,6 @@ export const Chatbot: React.FC = () => {
       if (chatData.prescription) {
         setPrescriptionData(chatData.prescription);
       } else {
-        // Fallback: trigger prescription/medicine bar if assistant mentions treatment or medicine
         setPrescriptionData({ ready: true });
       }
     } catch (err) {
@@ -136,7 +143,6 @@ export const Chatbot: React.FC = () => {
         )}
       </div>
 
-      {/* Action Bar for Prescriptions and Buying Medicines */}
       {prescriptionData && (
         <div className="bg-amber-50 border-t border-amber-200 p-3 flex flex-wrap justify-between items-center px-6 gap-2">
           <p className="text-xs text-amber-800 font-medium">Official Prescription & Recommended Medications Ready</p>
