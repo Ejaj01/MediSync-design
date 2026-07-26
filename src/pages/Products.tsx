@@ -7,12 +7,15 @@ interface Medicine {
   name: string;
   category: string;
   specialty?: string;
-  price?: number; // fallback if fee/price isn't defined
+  price?: number;
 }
 
 interface PurchaseResult {
   token: string;
   transaction_id: string;
+  quantity: number;
+  total_amount: number;
+  address: string;
 }
 
 export default function Products() {
@@ -22,8 +25,14 @@ export default function Products() {
 
   // Modal state
   const [selectedMed, setSelectedMed] = useState<Medicine | null>(null);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [address, setAddress] = useState<string>("");
+  const [addressError, setAddressError] = useState<string>("");
   const [processing, setProcessing] = useState<boolean>(false);
   const [purchaseResult, setPurchaseResult] = useState<PurchaseResult | null>(null);
+
+  const unitPrice = 15.00;
+  const deliveryFee = 100.00; // 100 TK delivery charge within Dhaka
 
   const specialties = [
     "Cardiology", "Dermatology", "Endocrinology", "Gastroenterology", 
@@ -48,22 +57,38 @@ export default function Products() {
 
   const handleOpenCheckout = (med: Medicine) => {
     setSelectedMed(med);
+    setQuantity(1);
+    setAddress("");
+    setAddressError("");
     setPurchaseResult(null);
   };
 
   const handleConfirmPayment = async () => {
     if (!selectedMed) return;
+
+    if (!address.trim()) {
+      setAddressError("Delivery address is required.");
+      return;
+    }
+
+    setAddressError("");
     setProcessing(true);
+
     try {
-      // Simulating purchase API request using checkout endpoint structure
-      const price = selectedMed.price || 15; // default price if not specified
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"}/api/checkout?doctor_id=${selectedMed.id}&amount=${price}`, {
+      const subtotal = quantity * unitPrice;
+      const totalAmount = subtotal + deliveryFee;
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"}/api/checkout?doctor_id=${selectedMed.id}&amount=${totalAmount}`, {
         method: "POST",
       });
       const data = await response.json();
+      
       setPurchaseResult({
         token: data.token || `MED-PASS-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        transaction_id: data.transaction_id || `txn_med_${Math.random().toString(36).substring(2, 10)}`
+        transaction_id: data.transaction_id || `txn_med_${Math.random().toString(36).substring(2, 10)}`,
+        quantity: quantity,
+        total_amount: totalAmount,
+        address: address
       });
     } catch (err) {
       console.error("Purchase failed:", err);
@@ -75,7 +100,6 @@ export default function Products() {
 
   const handleDownloadReceipt = () => {
     if (!selectedMed || !purchaseResult) return;
-    const price = selectedMed.price || 15;
     
     const receiptContent = `
 ========================================
@@ -83,7 +107,11 @@ export default function Products() {
 ========================================
 Medicine: ${selectedMed.name}
 Category: ${selectedMed.category}
-Amount Paid: $${price}
+Quantity: ${purchaseResult.quantity}
+Unit Price: $${unitPrice.toFixed(2)}
+Delivery Charge (Dhaka Only): 100 TK ($${deliveryFee.toFixed(2)})
+Total Paid: $${purchaseResult.total_amount.toFixed(2)}
+Delivery Address: ${purchaseResult.address}
 Token Pass: ${purchaseResult.token}
 Transaction ID: ${purchaseResult.transaction_id}
 Date: ${new Date().toLocaleString()}
@@ -162,14 +190,59 @@ Thank you for purchasing with MediSync!
             <h2 className="text-xl font-bold text-gray-800 mb-4">Secure Pharmacy Checkout</h2>
             
             {!purchaseResult ? (
-              <div>
-                <div className="bg-gray-50 p-4 rounded-lg mb-4 space-y-2 border">
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg space-y-2 border">
                   <p className="text-sm text-gray-600"><strong>Medication:</strong> {selectedMed.name}</p>
                   <p className="text-sm text-gray-600"><strong>Category:</strong> {selectedMed.category}</p>
-                  <p className="text-sm text-gray-600"><strong>Price:</strong> <span className="text-green-600 font-bold">$15.00</span></p>
+                  <p className="text-sm text-gray-600"><strong>Unit Price:</strong> <span className="text-green-600 font-bold">${unitPrice.toFixed(2)}</span></p>
                 </div>
 
-                <div className="mb-4">
+                {/* Quantity Selector */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Quantity</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max="50" 
+                    value={quantity}
+                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full border rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Delivery Address Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Delivery Address (Dhaka City Only)</label>
+                  <textarea 
+                    rows={2}
+                    value={address}
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      if (e.target.value.trim()) setAddressError("");
+                    }}
+                    placeholder="Enter your street, area, Dhaka..."
+                    className={`w-full border rounded p-2 text-sm focus:outline-none focus:ring-2 ${addressError ? "border-red-500 focus:ring-red-500" : "focus:ring-blue-500"}`}
+                  />
+                  {addressError && <p className="text-xs text-red-500 mt-1">{addressError}</p>}
+                </div>
+
+                {/* Price Breakdown */}
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs space-y-1 text-gray-700">
+                  <div className="flex justify-between">
+                    <span>Subtotal ({quantity}x):</span>
+                    <span>${(quantity * unitPrice).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Dhaka City Delivery Fee:</span>
+                    <span>100 TK (${deliveryFee.toFixed(2)})</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-sm text-blue-900 pt-1 border-t border-blue-200">
+                    <span>Total Amount:</span>
+                    <span>${(quantity * unitPrice + deliveryFee).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="mb-2">
                   <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Simulated Card Details</label>
                   <input 
                     type="text" 
@@ -179,7 +252,7 @@ Thank you for purchasing with MediSync!
                   />
                 </div>
 
-                <div className="flex justify-end space-x-3">
+                <div className="flex justify-end space-x-3 pt-2">
                   <button 
                     onClick={closeModal}
                     className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50"
@@ -191,21 +264,22 @@ Thank you for purchasing with MediSync!
                     disabled={processing}
                     className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition flex items-center"
                   >
-                    {processing ? "Processing..." : "Pay $15.00"}
+                    {processing ? "Processing..." : `Pay $${(quantity * unitPrice + deliveryFee).toFixed(2)}`}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="text-center space-y-4">
                 <div className="text-green-600 text-5xl mb-2">✓</div>
-                <h3 className="text-lg font-bold text-gray-800">Purchase Successful!</h3>
-                <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-left space-y-1">
-                  <p className="text-xs text-gray-600"><strong>Medicine:</strong> {selectedMed.name}</p>
-                  <p className="text-xs text-gray-600"><strong>Amount Paid:</strong> $15.00</p>
-                  <p className="text-xs text-gray-600"><strong>Token Pass:</strong> <span className="font-mono text-blue-600">{purchaseResult.token}</span></p>
-                  <p className="text-xs text-gray-600"><strong>Transaction ID:</strong> <span className="font-mono text-gray-600">{purchaseResult.transaction_id}</span></p>
+                <h3 className="text-lg font-bold text-gray-800">Order Successful!</h3>
+                <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-left space-y-1 text-xs">
+                  <p className="text-gray-600"><strong>Medicine:</strong> {selectedMed.name} (Qty: {purchaseResult.quantity})</p>
+                  <p className="text-gray-600"><strong>Delivery Address:</strong> {purchaseResult.address}</p>
+                  <p className="text-gray-600"><strong>Total Paid:</strong> ${purchaseResult.total_amount.toFixed(2)} (Incl. 100 TK delivery)</p>
+                  <p className="text-gray-600"><strong>Token Pass:</strong> <span className="font-mono text-blue-600">{purchaseResult.token}</span></p>
+                  <p className="text-gray-600"><strong>Transaction ID:</strong> <span className="font-mono text-gray-600">{purchaseResult.transaction_id}</span></p>
                 </div>
-                <p className="text-xs text-gray-500">Your medication order has been processed. Download your receipt below.</p>
+                <p className="text-xs text-gray-500">Your delivery within Dhaka city is confirmed. Download your official receipt below.</p>
                 
                 <div className="flex space-x-3">
                   <button 
