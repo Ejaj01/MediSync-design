@@ -12,7 +12,7 @@ export const Chatbot: React.FC = () => {
   const doctorId = searchParams.get('doctor') || 'cardio';
 
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: `Hello! I am your assigned Medisync specialist. How can I assist you with your clinical evaluation today? You may also attach any prior reports or medical scans using the upload option below.` }
+    { role: 'assistant', content: `Hello there. I'm here to support you through your health evaluation today. Feel free to share what's on your mind or attach any medical scans or reports so we can look at them together.` }
   ]);
   const [inputQuery, setInputQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -26,13 +26,21 @@ export const Chatbot: React.FC = () => {
     if (!inputQuery.trim() && !selectedFile) return;
 
     const userMsg = inputQuery;
+    const fileName = selectedFile ? selectedFile.name : null;
+    
     setInputQuery('');
-    setMessages((prev) => [...prev, { role: 'user', content: userMsg || '[Attached Medical Document for Review]' }]);
+    
+    // Display file name or custom message in chat stream
+    const displayContent = fileName 
+      ? `${userMsg ? userMsg + ' — ' : ''}📎 [Attached Report: ${fileName}]` 
+      : userMsg;
+
+    setMessages((prev) => [...prev, { role: 'user', content: displayContent }]);
     setLoading(true);
 
     try {
       const formData = new FormData();
-      formData.append('message', userMsg || 'Please review this medical scan/document.');
+      formData.append('message', userMsg || 'Please review this attached medical document.');
       if (selectedFile) {
         formData.append('file', selectedFile);
       }
@@ -46,7 +54,7 @@ export const Chatbot: React.FC = () => {
 
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: chatData.reply || 'Review completed. Follow recommended protocols.' }
+        { role: 'assistant', content: chatData.reply || "I've reviewed the details. Let's take things step by step." }
       ]);
 
       if (chatData.prescription) {
@@ -55,7 +63,7 @@ export const Chatbot: React.FC = () => {
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: 'Connection error communicating with the clinical server.' }
+        { role: 'assistant', content: "I'm having a bit of trouble connecting to our clinical server right now. Let's try that again in a moment." }
       ]);
     } finally {
       setLoading(false);
@@ -86,7 +94,7 @@ export const Chatbot: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 flex flex-col h-[85vh]">
       <div className="bg-blue-600 text-white p-4 rounded-t-xl flex justify-between items-center shadow">
-        <h2 className="text-lg font-semibold capitalize">Live Telehealth Session — Dr. Persona [{doctorId}]</h2>
+        <h2 className="text-lg font-semibold capitalize">Live Telehealth Session — Specialist Consultation</h2>
         <span className="text-xs bg-blue-500 px-2.5 py-1 rounded-full">Secure SSL Channel</span>
       </div>
 
@@ -101,7 +109,7 @@ export const Chatbot: React.FC = () => {
         {loading && (
           <div className="flex justify-start">
             <div className="bg-white text-slate-500 shadow-sm border border-slate-200 rounded-xl px-4 py-3 text-sm animate-pulse">
-              Physician analyzing query and attached records...
+              Dr. Persona is reviewing your records and reflecting...
             </div>
           </div>
         )}
@@ -126,7 +134,7 @@ export const Chatbot: React.FC = () => {
           type="text"
           value={inputQuery}
           onChange={(e) => setInputQuery(e.target.value)}
-          placeholder="Type your symptoms or message..."
+          placeholder="Talk to your doctor or type your symptoms..."
           className="flex-1 border border-slate-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
         />
         <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
