@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/Chatbot.tsx
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 interface Message {
@@ -18,7 +19,7 @@ export const Chatbot: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [prescriptionData, setPrescriptionData] = useState<any>(null);
 
-  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://medisync-design-production.up.railway.app';
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,28 +31,15 @@ export const Chatbot: React.FC = () => {
     setLoading(true);
 
     try {
-      let analysisContext = '';
-      
-      // If a file/scan is attached, process it through the vision/OCR pipeline
+      const formData = new FormData();
+      formData.append('message', userMsg || 'Please review this medical scan/document.');
       if (selectedFile) {
-        const formData = new FormData();
         formData.append('file', selectedFile);
-        formData.append('doctorId', doctorId);
-        formData.append('reportText', userMsg);
-
-        const scanRes = await fetch(`${apiBaseUrl}/api/consultation/analyze`, {
-          method: 'POST',
-          body: formData,
-        });
-        const scanResult = await scanRes.json();
-        analysisContext = `\n[Vision/OCR Scan Analysis: ${scanResult.detectedAnomalies} — ${scanResult.damageAssessment}]`;
       }
 
-      // Send chat query to backend endpoint
-      const chatRes = await fetch(`${apiBaseUrl}/api/consultation/chat`, {
+      const chatRes = await fetch(`${apiBaseUrl}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doctorId, query: userMsg + analysisContext }),
+        body: formData,
       });
       
       const chatData = await chatRes.json();
@@ -105,7 +93,7 @@ export const Chatbot: React.FC = () => {
       <div className="flex-1 bg-slate-50 border-x border-slate-200 p-4 overflow-y-auto space-y-4">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-lg rounded-xl px-4 py-3 text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 shadow-sm border border-slate-200'}`}>
+            <div className={`max-w-lg rounded-xl px-4 py-3 text-sm whitespace-pre-line ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 shadow-sm border border-slate-200'}`}>
               {msg.content}
             </div>
           </div>
