@@ -14,7 +14,16 @@ export async function fetchDoctors() {
     }
     return await response.json();
 }
-
+// Simulate Stripe Payment & Generate Consultation Token
+export async function bookConsultation(doctorId: string, amount: number) {
+    const response = await fetch(`${API_BASE_URL}/api/checkout?doctor_id=${encodeURIComponent(doctorId)}&amount=${amount}`, {
+        method: "POST",
+    });
+    if (!response.ok) {
+        throw new Error("Failed to process consultation payment");
+    }
+    return await response.json();
+}
 // Fetch the 300+ Medicines inventory (with optional specialty filter)
 export async function fetchMedicines(specialty?: string) {
     let url = `${API_BASE_URL}/api/medicines`;
