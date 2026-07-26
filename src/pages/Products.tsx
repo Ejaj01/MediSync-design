@@ -16,6 +16,7 @@ interface PurchaseResult {
   quantity: number;
   total_amount: number;
   address: string;
+  phone: string;
 }
 
 export default function Products() {
@@ -27,12 +28,13 @@ export default function Products() {
   const [selectedMed, setSelectedMed] = useState<Medicine | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [address, setAddress] = useState<string>("");
-  const [addressError, setAddressError] = useState<string>("");
+  const [phone, setPhone] = useState<string>("");
+  const [formError, setFormError] = useState<string>("");
   const [processing, setProcessing] = useState<boolean>(false);
   const [purchaseResult, setPurchaseResult] = useState<PurchaseResult | null>(null);
 
   const unitPrice = 15.00;
-  const deliveryFee = 100.00; // 100 TK delivery charge within Dhaka
+  const deliveryFee = 10.00; // $10 delivery charge within Dhaka
 
   const specialties = [
     "Cardiology", "Dermatology", "Endocrinology", "Gastroenterology", 
@@ -59,7 +61,8 @@ export default function Products() {
     setSelectedMed(med);
     setQuantity(1);
     setAddress("");
-    setAddressError("");
+    setPhone("");
+    setFormError("");
     setPurchaseResult(null);
   };
 
@@ -67,11 +70,16 @@ export default function Products() {
     if (!selectedMed) return;
 
     if (!address.trim()) {
-      setAddressError("Delivery address is required.");
+      setFormError("Delivery address is required.");
       return;
     }
 
-    setAddressError("");
+    if (!phone.trim()) {
+      setFormError("Phone number is required.");
+      return;
+    }
+
+    setFormError("");
     setProcessing(true);
 
     try {
@@ -88,7 +96,8 @@ export default function Products() {
         transaction_id: data.transaction_id || `txn_med_${Math.random().toString(36).substring(2, 10)}`,
         quantity: quantity,
         total_amount: totalAmount,
-        address: address
+        address: address,
+        phone: phone
       });
     } catch (err) {
       console.error("Purchase failed:", err);
@@ -109,9 +118,10 @@ Medicine: ${selectedMed.name}
 Category: ${selectedMed.category}
 Quantity: ${purchaseResult.quantity}
 Unit Price: $${unitPrice.toFixed(2)}
-Delivery Charge (Dhaka Only): 100 TK ($${deliveryFee.toFixed(2)})
+Delivery Charge (Dhaka Only): $${deliveryFee.toFixed(2)}
 Total Paid: $${purchaseResult.total_amount.toFixed(2)}
 Delivery Address: ${purchaseResult.address}
+Phone Number: ${purchaseResult.phone}
 Token Pass: ${purchaseResult.token}
 Transaction ID: ${purchaseResult.transaction_id}
 Date: ${new Date().toLocaleString()}
@@ -218,13 +228,29 @@ Thank you for purchasing with MediSync!
                     value={address}
                     onChange={(e) => {
                       setAddress(e.target.value);
-                      if (e.target.value.trim()) setAddressError("");
+                      if (e.target.value.trim() && phone.trim()) setFormError("");
                     }}
                     placeholder="Enter your street, area, Dhaka..."
-                    className={`w-full border rounded p-2 text-sm focus:outline-none focus:ring-2 ${addressError ? "border-red-500 focus:ring-red-500" : "focus:ring-blue-500"}`}
+                    className="w-full border rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  {addressError && <p className="text-xs text-red-500 mt-1">{addressError}</p>}
                 </div>
+
+                {/* Phone Number Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Phone Number</label>
+                  <input 
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      if (e.target.value.trim() && address.trim()) setFormError("");
+                    }}
+                    placeholder="+880 1XXXXXXXXX"
+                    className="w-full border rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {formError && <p className="text-xs text-red-500">{formError}</p>}
 
                 {/* Price Breakdown */}
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs space-y-1 text-gray-700">
@@ -234,7 +260,7 @@ Thank you for purchasing with MediSync!
                   </div>
                   <div className="flex justify-between">
                     <span>Dhaka City Delivery Fee:</span>
-                    <span>100 TK (${deliveryFee.toFixed(2)})</span>
+                    <span>${deliveryFee.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-sm text-blue-900 pt-1 border-t border-blue-200">
                     <span>Total Amount:</span>
@@ -275,11 +301,12 @@ Thank you for purchasing with MediSync!
                 <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-left space-y-1 text-xs">
                   <p className="text-gray-600"><strong>Medicine:</strong> {selectedMed.name} (Qty: {purchaseResult.quantity})</p>
                   <p className="text-gray-600"><strong>Delivery Address:</strong> {purchaseResult.address}</p>
-                  <p className="text-gray-600"><strong>Total Paid:</strong> ${purchaseResult.total_amount.toFixed(2)} (Incl. 100 TK delivery)</p>
+                  <p className="text-gray-600"><strong>Phone:</strong> {purchaseResult.phone}</p>
+                  <p className="text-gray-600"><strong>Total Paid:</strong> ${purchaseResult.total_amount.toFixed(2)} (Incl. $10 delivery)</p>
                   <p className="text-gray-600"><strong>Token Pass:</strong> <span className="font-mono text-blue-600">{purchaseResult.token}</span></p>
                   <p className="text-gray-600"><strong>Transaction ID:</strong> <span className="font-mono text-gray-600">{purchaseResult.transaction_id}</span></p>
                 </div>
-                <p className="text-xs text-gray-500">Your delivery within Dhaka city is confirmed. Download your official receipt below.</p>
+                <p className="text-xs text-gray-500">Your delivery details have been recorded. Download your official receipt below.</p>
                 
                 <div className="flex space-x-3">
                   <button 
