@@ -1,7 +1,7 @@
 // src/pages/Chatbot.tsx
 import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai/web';
 
 interface Message {
   role: 'user' | 'assistant';
