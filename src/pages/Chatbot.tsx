@@ -5,6 +5,8 @@ import { useSearchParams } from 'react-router-dom';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  fileUrl?: string; // Added to support image previews
+  fileName?: string;
 }
 
 export const Chatbot: React.FC = () => {
@@ -26,23 +28,32 @@ export const Chatbot: React.FC = () => {
     if (!inputQuery.trim() && !selectedFile) return;
 
     const userMsg = inputQuery;
-    const fileName = selectedFile ? selectedFile.name : null;
+    const fileToUpload = selectedFile;
     
     setInputQuery('');
-    
-    // Display file name or custom message in chat stream
-    const displayContent = fileName 
-      ? `${userMsg ? userMsg + ' — ' : ''}📎 [Attached Report: ${fileName}]` 
-      : userMsg;
+    setSelectedFile(null); // Clear selected file state immediately for UI
 
-    setMessages((prev) => [...prev, { role: 'user', content: displayContent }]);
+    // Generate local object preview URL if it's an image file
+    const filePreviewUrl = fileToUpload && fileToUpload.type.startsWith('image/') 
+      ? URL.createObjectURL(fileToUpload) 
+      : undefined;
+
+    setMessages((prev) => [
+      ...prev, 
+      { 
+        role: 'user', 
+        content: userMsg, 
+        fileUrl: filePreviewUrl, 
+        fileName: fileToUpload?.name 
+      }
+    ]);
     setLoading(true);
 
     try {
       const formData = new FormData();
       formData.append('message', userMsg || 'Please review this attached medical document.');
-      if (selectedFile) {
-        formData.append('file', selectedFile);
+      if (fileToUpload) {
+        formData.append('file', fileToUpload);
       }
 
       const chatRes = await fetch(`${apiBaseUrl}/api/chat`, {
@@ -67,7 +78,6 @@ export const Chatbot: React.FC = () => {
       ]);
     } finally {
       setLoading(false);
-      setSelectedFile(null);
     }
   };
 
@@ -102,6 +112,16 @@ export const Chatbot: React.FC = () => {
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-lg rounded-xl px-4 py-3 text-sm whitespace-pre-line ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 shadow-sm border border-slate-200'}`}>
+              {/* Display image preview if attached */}
+              {msg.fileUrl && (
+                <div className="mb-2">
+                  <img src={msg.fileUrl} alt="Uploaded scan" className="max-h-48 rounded-lg object-contain bg-slate-900/10 w-full" />
+                </div>
+              )}
+              {/* Display file name if it's a non-image file */}
+              {msg.fileName && !msg.fileUrl && (
+                <div className="text-xs italic mb-1 opacity-90">📎 {msg.fileName}</div>
+              )}
               {msg.content}
             </div>
           </div>
