@@ -71,7 +71,7 @@ export const Chatbot: React.FC = () => {
         try {
           // Use frontend Gemini SDK for casual chat (saves backend tokens!)
           const response = await aiClient.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'models/gemini-1.5-flash',
             contents: userMsg,
             config: {
               systemInstruction: "You are a friendly medical assistant chatbot. Keep conversational replies warm, brief, and polite."
