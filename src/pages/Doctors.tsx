@@ -1,5 +1,5 @@
 // src/pages/Doctors.tsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchDoctors, bookConsultation } from "../api";
 
 interface Doctor {
