@@ -28,17 +28,7 @@ export const Chatbot: React.FC = () => {
     e.preventDefault();
     if (!inputQuery.trim() && !selectedFile) return;
 
-    // Only redirect to doctors/appointments if an actual file is uploaded 
-    // or the text indicates a specific deep medical query (length > 15 chars & not a greeting)
-    const isGreeting = ['hi', 'hello', 'hey'].includes(inputQuery.trim().toLowerCase());
-    const isSpecificMedicalQuery = Boolean(selectedFile || (!isGreeting && inputQuery.trim().length > 15));
-
-    if (isSpecificMedicalQuery && selectedFile) {
-      navigate('/doctors');
-      return;
-    }
-
-    const userMsg = inputQuery;
+    const userMsg = inputQuery.trim();
     const fileToUpload = selectedFile;
     
     setInputQuery('');
@@ -57,6 +47,26 @@ export const Chatbot: React.FC = () => {
         fileName: fileToUpload?.name 
       }
     ]);
+
+    // Check if it's a casual greeting/chatter (no file and short casual text)
+    const lowerMsg = userMsg.toLowerCase();
+    const casualGreetings = ['hi', 'hello', 'hey', 'how are you', 'good morning', 'good evening', 'sup'];
+    const isCasual = !fileToUpload && (casualGreetings.includes(lowerMsg) || casualGreetings.some(g => lowerMsg.startsWith(g + ' ')));
+
+    if (isCasual) {
+      // Respond instantly on frontend without triggering backend medical evaluation
+      setLoading(true);
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: "Hello! I'm doing well, thank you. Whenever you're ready, feel free to share your symptoms or medical reports so we can review them." }
+        ]);
+        setLoading(false);
+      }, 500);
+      return;
+    }
+
+    // Otherwise, it's a real query or file upload — proceed to backend API
     setLoading(true);
 
     try {
@@ -75,7 +85,7 @@ export const Chatbot: React.FC = () => {
 
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: chatData.reply || "I've reviewed the details. Let's take things step by step." }
+        { role: 'assistant', content: chatData.reply || "I's reviewed the details. Let's take things step by step." }
       ]);
     } catch (err) {
       setMessages((prev) => [
@@ -149,7 +159,6 @@ export const Chatbot: React.FC = () => {
         )}
       </div>
 
-      {/* Action Bar shown only after clicking End Session */}
       {sessionEnded && (
         <div className="bg-amber-50 border-t border-amber-200 p-3 flex flex-wrap justify-between items-center px-6 gap-2">
           <p className="text-xs text-amber-800 font-medium">Session Ended. Official Prescription & Recommended Medications Ready.</p>
