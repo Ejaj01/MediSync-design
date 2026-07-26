@@ -68,39 +68,45 @@ export const Chatbot: React.FC = () => {
 
     try {
       if (isCasualChat && aiClient) {
-        // Use frontend Gemini SDK for casual chat (saves backend tokens!)
-        const response = await aiClient.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: userMsg,
-          config: {
-            systemInstruction: "You are a friendly medical assistant chatbot. Keep conversational replies warm, brief, and polite."
-          }
-        });
+        try {
+          // Use frontend Gemini SDK for casual chat (saves backend tokens!)
+          const response = await aiClient.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: userMsg,
+            config: {
+              systemInstruction: "You are a friendly medical assistant chatbot. Keep conversational replies warm, brief, and polite."
+            }
+          });
 
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: response.text || "Hello! How can I help you today?" }
-        ]);
-      } else {
-        // Send to backend only for document scans or serious clinical questions
-        const formData = new FormData();
-        formData.append('message', userMsg || 'Please review this attached medical document.');
-        if (fileToUpload) {
-          formData.append('file', fileToUpload);
+          setMessages((prev) => [
+            ...prev,
+            { role: 'assistant', content: response.text || "Hello! How can I help you today?" }
+          ]);
+          return;
+        } catch (frontendErr) {
+          console.warn("Frontend Gemini SDK call failed, falling back to backend...", frontendErr);
+          // Fall through to backend if frontend key encounters any hiccup
         }
-
-        const chatRes = await fetch(`${apiBaseUrl}/api/chat`, {
-          method: 'POST',
-          body: formData,
-        });
-        
-        const chatData = await chatRes.json();
-
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: chatData.reply || "I've reviewed the details. Let's take things step by step." }
-        ]);
       }
+
+      // Send to backend for document scans, serious clinical questions, or if frontend client is missing/failed
+      const formData = new FormData();
+      formData.append('message', userMsg || 'Please review this attached medical document.');
+      if (fileToUpload) {
+        formData.append('file', fileToUpload);
+      }
+
+      const chatRes = await fetch(`${apiBaseUrl}/api/chat`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const chatData = await chatRes.json();
+
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: chatData.reply || chatData.error || "I've reviewed the details. Let's take things step by step." }
+      ]);
     } catch (err: any) {
       console.error(err);
       setMessages((prev) => [
