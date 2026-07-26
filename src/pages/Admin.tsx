@@ -74,7 +74,7 @@ export default function Admin() {
   const [announcementEdit, setAnnouncementEdit] = useState({ ...siteAnnouncement })
 
   // New user form
-  const emptyUser = { name: '', email: '', phone: '', role: 'patient' as const, specialty: '', status: 'active' as const, joined: new Date().toISOString().split('T')[0], avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=60&h=60&fit=crop&auto=format', appointments: 0, verified: true }
+  const emptyUser = { name: '', email: '', phone: '', role: 'patient' as 'patient' | 'doctor', specialty: '', status: 'active' as const, joined: new Date().toISOString().split('T')[0], avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=60&h=60&fit=crop&auto=format', appointments: 0, verified: true }
   const [newUser, setNewUser] = useState({ ...emptyUser })
 
   // New product form
