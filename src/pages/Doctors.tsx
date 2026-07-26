@@ -1,6 +1,6 @@
 // src/pages/Doctors.tsx
 import React, { useEffect, useState } from "react";
-import { fetchDoctors } from "../api";
+import { fetchDoctors, bookConsultation } from "../api";
 
 interface Doctor {
   id: string;
@@ -28,6 +28,16 @@ export default function Doctors() {
     loadDoctors();
   }, []);
 
+  const handleBooking = async (doc: Doctor) => {
+    try {
+      const response = await bookConsultation(doc.id, doc.fee);
+      alert(`Booking Successful!\nDoctor: ${doc.name}\nToken: ${response.token}\nTransaction: ${response.transaction_id}`);
+    } catch (err) {
+      console.error("Booking failed:", err);
+      alert("Failed to process consultation booking. Please try again.");
+    }
+  };
+
   if (loading) return <div className="p-6">Loading specialized doctors...</div>;
 
   return (
@@ -41,7 +51,10 @@ export default function Doctors() {
             <p className="text-sm text-gray-600 mt-2">{doc.bio}</p>
             <div className="mt-4 flex justify-between items-center">
               <span className="text-green-600 font-bold">Fee: ${doc.fee}</span>
-              <button className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700">
+              <button 
+                onClick={() => handleBooking(doc)}
+                className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700 transition"
+              >
                 Book Consultation
               </button>
             </div>
