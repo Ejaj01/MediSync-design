@@ -20,7 +20,7 @@ export const Chatbot: React.FC = () => {
   const [inputQuery, setInputQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [prescriptionData, setPrescriptionData] = useState<any>(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://medisync-design-production.up.railway.app';
 
@@ -28,10 +28,12 @@ export const Chatbot: React.FC = () => {
     e.preventDefault();
     if (!inputQuery.trim() && !selectedFile) return;
 
-    // Check if the user is asking about a specific problem or uploading a file directly
-    const isSpecificMedicalQuery = Boolean(selectedFile || inputQuery.trim().length > 5);
+    // Only redirect to doctors/appointments if an actual file is uploaded 
+    // or the text indicates a specific deep medical query (length > 15 chars & not a greeting)
+    const isGreeting = ['hi', 'hello', 'hey'].includes(inputQuery.trim().toLowerCase());
+    const isSpecificMedicalQuery = Boolean(selectedFile || (!isGreeting && inputQuery.trim().length > 15));
 
-    if (isSpecificMedicalQuery) {
+    if (isSpecificMedicalQuery && selectedFile) {
       navigate('/doctors');
       return;
     }
@@ -75,12 +77,6 @@ export const Chatbot: React.FC = () => {
         ...prev,
         { role: 'assistant', content: chatData.reply || "I've reviewed the details. Let's take things step by step." }
       ]);
-
-      if (chatData.prescription) {
-        setPrescriptionData(chatData.prescription);
-      } else {
-        setPrescriptionData({ ready: true });
-      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -115,7 +111,17 @@ export const Chatbot: React.FC = () => {
     <div className="max-w-4xl mx-auto px-4 py-8 flex flex-col h-[85vh]">
       <div className="bg-blue-600 text-white p-4 rounded-t-xl flex justify-between items-center shadow">
         <h2 className="text-lg font-semibold capitalize">Live Telehealth Session — Specialist Consultation</h2>
-        <span className="text-xs bg-blue-500 px-2.5 py-1 rounded-full">Secure SSL Channel</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs bg-blue-500 px-2.5 py-1 rounded-full">Secure SSL Channel</span>
+          {!sessionEnded && (
+            <button 
+              onClick={() => setSessionEnded(true)}
+              className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+            >
+              End Session
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 bg-slate-50 border-x border-slate-200 p-4 overflow-y-auto space-y-4">
@@ -143,9 +149,10 @@ export const Chatbot: React.FC = () => {
         )}
       </div>
 
-      {prescriptionData && (
+      {/* Action Bar shown only after clicking End Session */}
+      {sessionEnded && (
         <div className="bg-amber-50 border-t border-amber-200 p-3 flex flex-wrap justify-between items-center px-6 gap-2">
-          <p className="text-xs text-amber-800 font-medium">Official Prescription & Recommended Medications Ready</p>
+          <p className="text-xs text-amber-800 font-medium">Session Ended. Official Prescription & Recommended Medications Ready.</p>
           <div className="flex items-center gap-2">
             <button onClick={handleDownloadPDF} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors">
               Download PDF
@@ -169,8 +176,9 @@ export const Chatbot: React.FC = () => {
           onChange={(e) => setInputQuery(e.target.value)}
           placeholder="Talk to your doctor or type your symptoms..."
           className="flex-1 border border-slate-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+          disabled={sessionEnded}
         />
-        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button type="submit" disabled={sessionEnded} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
           Send
         </button>
       </form>
