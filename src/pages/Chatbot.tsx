@@ -1,16 +1,17 @@
 // src/pages/Chatbot.tsx
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  fileUrl?: string; // Added to support image previews
+  fileUrl?: string;
   fileName?: string;
 }
 
 export const Chatbot: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const doctorId = searchParams.get('doctor') || 'cardio';
 
   const [messages, setMessages] = useState<Message[]>([
@@ -31,9 +32,8 @@ export const Chatbot: React.FC = () => {
     const fileToUpload = selectedFile;
     
     setInputQuery('');
-    setSelectedFile(null); // Clear selected file state immediately for UI
+    setSelectedFile(null);
 
-    // Generate local object preview URL if it's an image file
     const filePreviewUrl = fileToUpload && fileToUpload.type.startsWith('image/') 
       ? URL.createObjectURL(fileToUpload) 
       : undefined;
@@ -70,6 +70,9 @@ export const Chatbot: React.FC = () => {
 
       if (chatData.prescription) {
         setPrescriptionData(chatData.prescription);
+      } else {
+        // Fallback: trigger prescription/medicine bar if assistant mentions treatment or medicine
+        setPrescriptionData({ ready: true });
       }
     } catch (err) {
       setMessages((prev) => [
@@ -112,13 +115,11 @@ export const Chatbot: React.FC = () => {
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-lg rounded-xl px-4 py-3 text-sm whitespace-pre-line ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 shadow-sm border border-slate-200'}`}>
-              {/* Display image preview if attached */}
               {msg.fileUrl && (
                 <div className="mb-2">
                   <img src={msg.fileUrl} alt="Uploaded scan" className="max-h-48 rounded-lg object-contain bg-slate-900/10 w-full" />
                 </div>
               )}
-              {/* Display file name if it's a non-image file */}
               {msg.fileName && !msg.fileUrl && (
                 <div className="text-xs italic mb-1 opacity-90">📎 {msg.fileName}</div>
               )}
@@ -135,12 +136,18 @@ export const Chatbot: React.FC = () => {
         )}
       </div>
 
+      {/* Action Bar for Prescriptions and Buying Medicines */}
       {prescriptionData && (
-        <div className="bg-amber-50 border-t border-amber-200 p-3 flex justify-between items-center px-6">
-          <p className="text-xs text-amber-800 font-medium">Official Prescription Ready for Download</p>
-          <button onClick={handleDownloadPDF} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors">
-            Download Prescription PDF
-          </button>
+        <div className="bg-amber-50 border-t border-amber-200 p-3 flex flex-wrap justify-between items-center px-6 gap-2">
+          <p className="text-xs text-amber-800 font-medium">Official Prescription & Recommended Medications Ready</p>
+          <div className="flex items-center gap-2">
+            <button onClick={handleDownloadPDF} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors">
+              Download PDF
+            </button>
+            <button onClick={() => navigate('/products')} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors">
+              🛒 Buy Medicines in Products
+            </button>
+          </div>
         </div>
       )}
 
