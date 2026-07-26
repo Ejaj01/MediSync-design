@@ -1,6 +1,7 @@
 // src/pages/Chatbot.tsx
 import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { GoogleGenAI } from '@google/genai';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -23,6 +24,10 @@ export const Chatbot: React.FC = () => {
   const [sessionEnded, setSessionEnded] = useState(false);
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://medisync-design-production.up.railway.app';
+
+  // Initialize Google Gen AI client for frontend casual chat
+  const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const aiClient = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,49 +53,59 @@ export const Chatbot: React.FC = () => {
       }
     ]);
 
-    // Check if it's a casual greeting/chatter (no file and short casual text)
+    // Condition: If NO file is attached and NO heavy medical keywords are found,
+    // handle it instantly using the frontend Gemini API key for smooth casual conversation.
+    const medicalKeywords = [
+      'pain', 'ache', 'symptom', 'fever', 'cough', 'blood', 'pressure', 'sugar', 
+      'report', 'scan', 'test', 'medicine', 'drug', 'doctor', 'disease', 'sick', 
+      'hurt', 'headache', 'stomach', 'heart', 'chest', 'breath', 'fatigue', 'dizzy'
+    ];
+    
     const lowerMsg = userMsg.toLowerCase();
-    const casualGreetings = ['hi', 'hello', 'hey', 'how are you', 'good morning', 'good evening', 'sup'];
-    const isCasual = !fileToUpload && (casualGreetings.includes(lowerMsg) || casualGreetings.some(g => lowerMsg.startsWith(g + ' ')));
+    const hasMedicalKeyword = medicalKeywords.some(keyword => lowerMsg.includes(keyword));
+    const isCasualChat = !fileToUpload && !hasMedicalKeyword;
 
-    if (isCasual) {
-      // Respond instantly on frontend without triggering backend medical evaluation
-      setLoading(true);
-      setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: "Hello! I'm doing well, thank you. Whenever you're ready, feel free to share your symptoms or medical reports so we can review them." }
-        ]);
-        setLoading(false);
-      }, 500);
-      return;
-    }
-
-    // Otherwise, it's a real query or file upload — proceed to backend API
     setLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('message', userMsg || 'Please review this attached medical document.');
-      if (fileToUpload) {
-        formData.append('file', fileToUpload);
+      if (isCasualChat && aiClient) {
+        // Use frontend Gemini API key for casual chit-chat
+        const response = await aiClient.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: userMsg,
+          config: {
+            systemInstruction: "You are a friendly medical assistant chatbot. Keep conversational replies warm, brief, and polite."
+          }
+        });
+
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: response.text || "Hello! How can I help you today?" }
+        ]);
+      } else {
+        // Forward documents or serious medical queries to your Railway backend evaluation engine
+        const formData = new FormData();
+        formData.append('message', userMsg || 'Please review this attached medical document.');
+        if (fileToUpload) {
+          formData.append('file', fileToUpload);
+        }
+
+        const chatRes = await fetch(`${apiBaseUrl}/api/chat`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const chatData = await chatRes.json();
+
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: chatData.reply || "I've reviewed the details. Let's take things step by step." }
+        ]);
       }
-
-      const chatRes = await fetch(`${apiBaseUrl}/api/chat`, {
-        method: 'POST',
-        body: formData,
-      });
-      
-      const chatData = await chatRes.json();
-
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: chatData.reply || "I's reviewed the details. Let's take things step by step." }
-      ]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: "I'm having a bit of trouble connecting to our clinical server right now. Let's try that again in a moment." }
+        { role: 'assistant', content: "I'm having a bit of trouble connecting right now. Let's try that again in a moment." }
       ]);
     } finally {
       setLoading(false);
