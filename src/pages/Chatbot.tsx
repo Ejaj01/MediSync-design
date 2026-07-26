@@ -53,8 +53,7 @@ export const Chatbot: React.FC = () => {
       }
     ]);
 
-    // Condition: If NO file is attached and NO heavy medical keywords are found,
-    // handle it instantly using the frontend Gemini API key for smooth casual conversation.
+    // Casual chat vs Backend evaluation condition
     const medicalKeywords = [
       'pain', 'ache', 'symptom', 'fever', 'cough', 'blood', 'pressure', 'sugar', 
       'report', 'scan', 'test', 'medicine', 'drug', 'doctor', 'disease', 'sick', 
@@ -69,7 +68,7 @@ export const Chatbot: React.FC = () => {
 
     try {
       if (isCasualChat && aiClient) {
-        // Use frontend Gemini API key for casual chit-chat
+        // Use frontend Gemini SDK for casual chat (saves backend tokens!)
         const response = await aiClient.models.generateContent({
           model: 'gemini-2.5-flash',
           contents: userMsg,
@@ -83,7 +82,7 @@ export const Chatbot: React.FC = () => {
           { role: 'assistant', content: response.text || "Hello! How can I help you today?" }
         ]);
       } else {
-        // Forward documents or serious medical queries to your Railway backend evaluation engine
+        // Send to backend only for document scans or serious clinical questions
         const formData = new FormData();
         formData.append('message', userMsg || 'Please review this attached medical document.');
         if (fileToUpload) {
@@ -102,10 +101,11 @@ export const Chatbot: React.FC = () => {
           { role: 'assistant', content: chatData.reply || "I've reviewed the details. Let's take things step by step." }
         ]);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error(err);
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: "I'm having a bit of trouble connecting right now. Let's try that again in a moment." }
+        { role: 'assistant', content: "I encountered a minor connection issue. Please check your API key settings or try again." }
       ]);
     } finally {
       setLoading(false);
